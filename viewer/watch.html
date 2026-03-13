@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScreenCast - Viewer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #a0a0a0;
+    }
+
+    #video-container {
+      position: relative;
+      background: #1a1a1a;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+
+    video {
+      width: 100%;
+      display: block;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.8);
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid #333;
+      border-top-color: #00cec9;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .message {
+      font-size: 18px;
+      color: #a0a0a0;
+    }
+
+    .error {
+      color: #e74c3c;
+    }
+
+    .paused-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+    }
+
+    .paused-overlay.hidden {
+      display: none;
+    }
+
+    .paused-text {
+      font-size: 24px;
+      color: #fdcb6e;
+    }
+
+    .status-bar {
+      margin-top: 15px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .status-bar .live {
+      color: #00b894;
+    }
+
+    .status-bar .live::before {
+      content: '● ';
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .fullscreen-btn {
+      position: absolute;
+      bottom: 15px;
+      right: 15px;
+      padding: 10px 15px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #video-container:hover .fullscreen-btn {
+      opacity: 1;
+    }
+
+    .fullscreen-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🖥️ ScreenCast</h1>
+
+    <div id="video-container">
+      <video id="video" autoplay playsinline></video>
+
+      <div id="loading-overlay" class="overlay">
+        <div class="spinner"></div>
+        <div class="message">Connexion au stream...</div>
+      </div>
+
+      <div id="paused-overlay" class="paused-overlay hidden">
+        <div class="paused-text">⏸ Stream en pause</div>
+      </div>
+
+      <div id="error-overlay" class="overlay hidden">
+        <div class="message error" id="error-message">Erreur</div>
+      </div>
+
+      <button id="fullscreen-btn" class="fullscreen-btn">⛶ Plein écran</button>
+    </div>
+
+    <div class="status-bar">
+      <span id="status">Connexion...</span>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Récupérer l'ID de session depuis l'URL
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('s');
+
+    if (!sessionId) {
+      showError('Lien invalide - pas d\'ID de session');
+    }
+
+    // Éléments DOM
+    const video = document.getElementById('video');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const pausedOverlay = document.getElementById('paused-overlay');
+    const errorOverlay = document.getElementById('error-overlay');
+    const errorMessage = document.getElementById('error-message');
+    const statusEl = document.getElementById('status');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const videoContainer = document.getElementById('video-container');
+
+    // WebRTC
+    let peerConnection = null;
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    // Connexion au serveur
+    const socket = io();
+
+    socket.on('connect', () => {
+      socket.emit('join-session', sessionId, (response) => {
+        if (response.error) {
+          showError(response.error);
+        }
+      });
+    });
+
+    socket.on('connect_error', () => {
+      showError('Impossible de se connecter au serveur');
+    });
+
+    // Recevoir l'offre WebRTC du broadcaster
+    socket.on('offer', async (broadcasterId, offer) => {
+      peerConnection = new RTCPeerConnection(rtcConfig);
+
+      // Quand on reçoit le stream
+      peerConnection.ontrack = (event) => {
+        video.srcObject = event.streams[0];
+        loadingOverlay.classList.add('hidden');
+        statusEl.innerHTML = '<span class="live">En direct</span>';
+      };
+
+      // Envoyer les ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice-candidate', broadcasterId, event.candidate);
+        }
+      };
+
+      // Traiter l'offre et envoyer la réponse
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('answer', broadcasterId, answer);
+    });
+
+    // ICE candidate du broadcaster
+    socket.on('ice-candidate', (senderId, candidate) => {
+      if (peerConnection) {
+        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    // Stream en pause
+    socket.on('stream-paused', () => {
+      pausedOverlay.classList.remove('hidden');
+      statusEl.textContent = 'En pause';
+    });
+
+    // Stream repris
+    socket.on('stream-resumed', () => {
+      pausedOverlay.classList.add('hidden');
+      statusEl.innerHTML = '<span class="live">En direct</span>';
+    });
+
+    // Stream terminé
+    socket.on('stream-ended', () => {
+      showError('Le stream est terminé');
+      if (peerConnection) {
+        peerConnection.close();
+      }
+    });
+
+    // Afficher une erreur
+    function showError(msg) {
+      loadingOverlay.classList.add('hidden');
+      errorOverlay.classList.remove('hidden');
+      errorMessage.textContent = msg;
+      statusEl.textContent = 'Déconnecté';
+    }
+
+    // Plein écran
+    fullscreenBtn.addEventListener('click', () => {
+      if (videoContainer.requestFullscreen) {
+        videoContainer.requestFullscreen();
+      } else if (videoContainer.webkitRequestFullscreen) {
+        videoContainer.webkitRequestFullscreen();
+      }
+    });
+
+    // Raccourci clavier F pour plein écran
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        fullscreenBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>
