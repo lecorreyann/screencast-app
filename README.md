@@ -1,31 +1,25 @@
 # ScreenCast
 
-Partage d'écran ultra-simple. Lance, clique, partage.
-
-## Prérequis
-
-1. **Node.js** : https://nodejs.org
-2. **cloudflared** :
-   - macOS : `brew install cloudflared`
-   - Windows : https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation
-   - Linux : `apt install cloudflared` ou voir lien ci-dessus
+Partage d'écran ultra-simple.
 
 ## Lancement
 
-### macOS / Linux
-```bash
-./start.sh
-```
+**Double-cliquer sur :**
 
-### Windows
-Double-cliquer sur `start.bat`
+| Système | Fichier |
+|---------|---------|
+| macOS | `ScreenCast.command` |
+| Windows | `ScreenCast-Windows.bat` |
+| Linux | `ScreenCast-Linux.sh` |
+
+Tout s'installe automatiquement au premier lancement.
 
 ## Utilisation
 
 1. L'app s'ouvre
-2. Sélectionne écran ou fenêtre
+2. Choisis écran ou fenêtre
 3. Clique **Démarrer**
-4. Copie le lien → envoie-le
-5. L'autre personne ouvre le lien dans son navigateur
+4. Copie le lien
+5. Envoie-le à quelqu'un
 
-C'est tout.
+L'autre personne ouvre le lien dans son navigateur. C'est tout.
