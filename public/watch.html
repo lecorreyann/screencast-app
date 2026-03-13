@@ -227,32 +227,68 @@
       showError('Impossible de se connecter au serveur');
     });
 
+    // File d'attente pour les ICE candidates reçus avant la connexion
+    let pendingCandidates = [];
+    let currentBroadcasterId = null;
+
     // Recevoir l'offre WebRTC
     socket.on('offer', async (broadcasterId, offer) => {
-      peerConnection = new RTCPeerConnection(rtcConfig);
+      try {
+        currentBroadcasterId = broadcasterId;
+        peerConnection = new RTCPeerConnection(rtcConfig);
 
-      peerConnection.ontrack = (event) => {
-        video.srcObject = event.streams[0];
-        loadingOverlay.classList.add('hidden');
-        statusEl.innerHTML = '<span class="live">En direct</span>';
-        statusEl.className = 'status live';
-      };
+        peerConnection.ontrack = (event) => {
+          console.log('Track reçu:', event.track.kind);
+          if (event.streams && event.streams[0]) {
+            video.srcObject = event.streams[0];
+            video.play().catch(e => console.log('Autoplay bloqué:', e));
+          }
+          loadingOverlay.classList.add('hidden');
+          statusEl.innerHTML = '<span class="live">En direct</span>';
+          statusEl.className = 'status live';
+        };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', broadcasterId, event.candidate);
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', broadcasterId, event.candidate);
+          }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+          console.log('Connection state:', peerConnection.connectionState);
+          if (peerConnection.connectionState === 'failed') {
+            showError('Connexion échouée - réessayez');
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          console.log('ICE state:', peerConnection.iceConnectionState);
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+        // Ajouter les candidates en attente
+        for (const candidate of pendingCandidates) {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
         }
-      };
+        pendingCandidates = [];
 
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      socket.emit('answer', broadcasterId, answer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('answer', broadcasterId, answer);
+        console.log('Answer envoyé');
+      } catch (err) {
+        console.error('Erreur WebRTC:', err);
+        showError('Erreur de connexion: ' + err.message);
+      }
     });
 
     socket.on('ice-candidate', (senderId, candidate) => {
-      if (peerConnection) {
-        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      if (peerConnection && peerConnection.remoteDescription) {
+        peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('ICE error:', e));
+      } else {
+        // Stocker pour plus tard
+        pendingCandidates.push(candidate);
       }
     });
 

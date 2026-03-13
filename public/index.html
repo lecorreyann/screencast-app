@@ -329,17 +329,34 @@
         });
 
         // Signaling
-        socket.on('answer', (viewerId, answer) => {
+        socket.on('answer', async (viewerId, answer) => {
           const pc = peerConnections.get(viewerId);
-          if (pc) {
-            pc.setRemoteDescription(new RTCSessionDescription(answer));
+          if (pc && pc.signalingState !== 'closed') {
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(answer));
+              console.log('Answer reçu de', viewerId);
+
+              // Ajouter les candidates en attente
+              const pending = pendingCandidates.get(viewerId) || [];
+              for (const candidate of pending) {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+              }
+              pendingCandidates.delete(viewerId);
+            } catch (e) {
+              console.error('Erreur setRemoteDescription:', e);
+            }
           }
         });
 
         socket.on('ice-candidate', (viewerId, candidate) => {
           const pc = peerConnections.get(viewerId);
-          if (pc) {
-            pc.addIceCandidate(new RTCIceCandidate(candidate));
+          if (pc && pc.remoteDescription) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('ICE error:', e));
+          } else {
+            // Stocker pour plus tard
+            const pending = pendingCandidates.get(viewerId) || [];
+            pending.push(candidate);
+            pendingCandidates.set(viewerId, pending);
           }
         });
 
@@ -362,24 +379,39 @@
       }
     }
 
+    // Stocker les candidates en attente par viewer
+    const pendingCandidates = new Map();
+
     // Créer connexion peer
     async function createPeerConnection(viewerId) {
-      const pc = new RTCPeerConnection(rtcConfig);
-      peerConnections.set(viewerId, pc);
+      try {
+        const pc = new RTCPeerConnection(rtcConfig);
+        peerConnections.set(viewerId, pc);
+        pendingCandidates.set(viewerId, []);
 
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
+        // Ajouter toutes les tracks
+        stream.getTracks().forEach(track => {
+          console.log('Ajout track:', track.kind);
+          pc.addTrack(track, stream);
+        });
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', viewerId, event.candidate);
-        }
-      };
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', viewerId, event.candidate);
+          }
+        };
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('offer', viewerId, offer);
+        pc.onconnectionstatechange = () => {
+          console.log('Peer', viewerId, 'state:', pc.connectionState);
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', viewerId, offer);
+        console.log('Offer envoyé à', viewerId);
+      } catch (err) {
+        console.error('Erreur création peer:', err);
+      }
     }
 
     // Pause/Resume
