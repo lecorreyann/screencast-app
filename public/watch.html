@@ -164,6 +164,11 @@
     <div id="error-overlay" class="overlay hidden">
       <div class="message error" id="error-message">Erreur</div>
     </div>
+
+    <div id="play-overlay" class="overlay hidden" style="cursor:pointer;">
+      <div style="font-size:80px;">▶️</div>
+      <div class="message">Cliquer pour voir le stream</div>
+    </div>
   </div>
 
   <button id="fullscreen-btn" class="fullscreen-btn">⛶ Plein écran</button>
@@ -241,9 +246,13 @@
           console.log('Track reçu:', event.track.kind);
           if (event.streams && event.streams[0]) {
             video.srcObject = event.streams[0];
-            video.play().catch(e => console.log('Autoplay bloqué:', e));
+            video.play().then(() => {
+              loadingOverlay.classList.add('hidden');
+            }).catch(e => {
+              console.log('Autoplay bloqué, affichage bouton play');
+              showPlayButton();
+            });
           }
-          loadingOverlay.classList.add('hidden');
           statusEl.innerHTML = '<span class="live">En direct</span>';
           statusEl.className = 'status live';
         };
@@ -317,6 +326,19 @@
       statusEl.textContent = 'Déconnecté';
       statusEl.className = 'status';
     }
+
+    // Bouton play pour mobile/autoplay bloqué
+    const playOverlay = document.getElementById('play-overlay');
+
+    function showPlayButton() {
+      loadingOverlay.classList.add('hidden');
+      playOverlay.classList.remove('hidden');
+    }
+
+    playOverlay.addEventListener('click', () => {
+      video.play();
+      playOverlay.classList.add('hidden');
+    });
 
     // Plein écran
     fullscreenBtn.addEventListener('click', () => {
