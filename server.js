@@ -10,28 +10,12 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// Servir la page viewer
-app.use(express.static(path.join(__dirname, '../viewer')));
+// Servir les fichiers statiques
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Stocker les sessions actives
+// Sessions actives
 const sessions = new Map();
 
-// URL publique (sera mise à jour dynamiquement)
-let publicUrl = null;
-
-// Endpoint pour définir l'URL publique (appelé par l'app Electron)
-app.post('/set-public-url', express.json(), (req, res) => {
-  publicUrl = req.body.url;
-  console.log('URL publique définie:', publicUrl);
-  res.json({ success: true });
-});
-
-// Endpoint pour récupérer l'URL publique
-app.get('/public-url', (req, res) => {
-  res.json({ url: publicUrl });
-});
-
-// Générer un ID court et lisible
 function generateSessionId() {
   return crypto.randomBytes(3).toString('hex');
 }
@@ -39,7 +23,7 @@ function generateSessionId() {
 io.on('connection', (socket) => {
   console.log('Connexion:', socket.id);
 
-  // L'émetteur crée une session
+  // Créer une session (émetteur)
   socket.on('create-session', (callback) => {
     const sessionId = generateSessionId();
     sessions.set(sessionId, {
@@ -50,10 +34,10 @@ io.on('connection', (socket) => {
     socket.sessionId = sessionId;
     socket.isBroadcaster = true;
     console.log('Session créée:', sessionId);
-    callback({ sessionId, publicUrl });
+    callback({ sessionId });
   });
 
-  // Un spectateur rejoint une session
+  // Rejoindre une session (spectateur)
   socket.on('join-session', (sessionId, callback) => {
     const session = sessions.get(sessionId);
     if (!session) {
@@ -65,13 +49,11 @@ io.on('connection', (socket) => {
     socket.sessionId = sessionId;
     socket.isBroadcaster = false;
     console.log('Viewer rejoint:', sessionId);
-
-    // Notifier le broadcaster qu'un viewer veut se connecter
     io.to(session.broadcaster).emit('viewer-joined', socket.id);
     callback({ success: true });
   });
 
-  // Relayer les signaux WebRTC
+  // Signaling WebRTC
   socket.on('offer', (viewerId, offer) => {
     io.to(viewerId).emit('offer', socket.id, offer);
   });
@@ -103,7 +85,6 @@ io.on('connection', (socket) => {
       const session = sessions.get(socket.sessionId);
       if (session) {
         if (socket.isBroadcaster) {
-          // Notifier tous les viewers que le stream est terminé
           io.to(socket.sessionId).emit('stream-ended');
           sessions.delete(socket.sessionId);
           console.log('Session terminée:', socket.sessionId);
@@ -120,9 +101,9 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════╗
-║  🖥️  Serveur ScreenCast démarré            ║
+║  🖥️  ScreenCast Server                     ║
 ║                                            ║
-║  Local:   http://localhost:${PORT}            ║
+║  http://localhost:${PORT}                     ║
 ╚════════════════════════════════════════════╝
   `);
 });

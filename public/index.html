@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScreenCast - Partage d'écran</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      text-align: center;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #a0a0a0;
+      margin-bottom: 40px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 18px 30px;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 15px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 184, 148, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .btn-pause {
+      background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+      color: #1a1a2e;
+    }
+
+    .btn-stop {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      color: #fff;
+    }
+
+    .link-box {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      display: none;
+    }
+
+    .link-box.active {
+      display: block;
+    }
+
+    .link-label {
+      font-size: 14px;
+      color: #a0a0a0;
+      margin-bottom: 10px;
+    }
+
+    .link-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .link-input {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(0,0,0,0.3);
+      color: #00cec9;
+      font-family: monospace;
+      font-size: 14px;
+    }
+
+    .btn-copy {
+      padding: 12px 20px;
+      background: #6c5ce7;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .btn-copy:hover {
+      background: #5b4cdb;
+    }
+
+    .status {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #a0a0a0;
+    }
+
+    .status.live {
+      color: #00b894;
+    }
+
+    .status.live::before {
+      content: '● ';
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .viewers {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #a0a0a0;
+    }
+
+    .preview {
+      margin-top: 20px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      display: none;
+    }
+
+    .preview.active {
+      display: block;
+    }
+
+    .preview video {
+      width: 100%;
+      display: block;
+    }
+
+    .controls {
+      display: none;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .controls.active {
+      display: flex;
+    }
+
+    .controls .btn {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .note {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🖥️ ScreenCast</h1>
+    <p class="subtitle">Partage d'écran instantané</p>
+
+    <button id="start-btn" class="btn btn-primary">Partager mon écran</button>
+
+    <div id="preview" class="preview">
+      <video id="preview-video" muted autoplay playsinline></video>
+    </div>
+
+    <div id="controls" class="controls">
+      <button id="pause-btn" class="btn btn-pause">⏸ Pause</button>
+      <button id="stop-btn" class="btn btn-stop">⏹ Arrêter</button>
+    </div>
+
+    <div id="link-box" class="link-box">
+      <div class="link-label">🔗 Envoie ce lien pour partager ton écran</div>
+      <div class="link-row">
+        <input type="text" id="link-input" class="link-input" readonly>
+        <button id="copy-btn" class="btn-copy">Copier</button>
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="viewers" class="viewers"></div>
+
+    <p class="note">Fonctionne sur Chrome, Edge, Firefox (desktop)</p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // État
+    let socket = null;
+    let stream = null;
+    let sessionId = null;
+    let isPaused = false;
+    let peerConnections = new Map();
+    let viewerCount = 0;
+
+    // Éléments DOM
+    const startBtn = document.getElementById('start-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const preview = document.getElementById('preview');
+    const previewVideo = document.getElementById('preview-video');
+    const controls = document.getElementById('controls');
+    const linkBox = document.getElementById('link-box');
+    const linkInput = document.getElementById('link-input');
+    const copyBtn = document.getElementById('copy-btn');
+    const statusEl = document.getElementById('status');
+    const viewersEl = document.getElementById('viewers');
+
+    // Config WebRTC
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    // Démarrer le partage
+    async function startSharing() {
+      try {
+        startBtn.textContent = 'Sélectionne ton écran...';
+        startBtn.disabled = true;
+
+        // Demander l'écran
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+
+        // Afficher la preview
+        previewVideo.srcObject = stream;
+        preview.classList.add('active');
+
+        // Connecter au serveur
+        socket = io();
+
+        socket.on('connect', () => {
+          socket.emit('create-session', (response) => {
+            sessionId = response.sessionId;
+            const shareUrl = `${window.location.origin}/watch.html?s=${sessionId}`;
+            linkInput.value = shareUrl;
+            linkBox.classList.add('active');
+            statusEl.textContent = 'En direct';
+            statusEl.className = 'status live';
+            updateViewerCount();
+          });
+        });
+
+        // Viewer rejoint
+        socket.on('viewer-joined', async (viewerId) => {
+          viewerCount++;
+          updateViewerCount();
+          await createPeerConnection(viewerId);
+        });
+
+        // Viewer part
+        socket.on('viewer-left', (viewerId) => {
+          viewerCount = Math.max(0, viewerCount - 1);
+          updateViewerCount();
+          const pc = peerConnections.get(viewerId);
+          if (pc) {
+            pc.close();
+            peerConnections.delete(viewerId);
+          }
+        });
+
+        // Signaling
+        socket.on('answer', (viewerId, answer) => {
+          const pc = peerConnections.get(viewerId);
+          if (pc) {
+            pc.setRemoteDescription(new RTCSessionDescription(answer));
+          }
+        });
+
+        socket.on('ice-candidate', (viewerId, candidate) => {
+          const pc = peerConnections.get(viewerId);
+          if (pc) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        });
+
+        // Quand l'utilisateur arrête le partage depuis le navigateur
+        stream.getVideoTracks()[0].onended = () => {
+          stopSharing();
+        };
+
+        // UI
+        startBtn.classList.add('hidden');
+        controls.classList.add('active');
+
+      } catch (err) {
+        console.error('Erreur:', err);
+        startBtn.textContent = 'Partager mon écran';
+        startBtn.disabled = false;
+        if (err.name !== 'NotAllowedError') {
+          statusEl.textContent = 'Erreur: ' + err.message;
+        }
+      }
+    }
+
+    // Créer connexion peer
+    async function createPeerConnection(viewerId) {
+      const pc = new RTCPeerConnection(rtcConfig);
+      peerConnections.set(viewerId, pc);
+
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice-candidate', viewerId, event.candidate);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('offer', viewerId, offer);
+    }
+
+    // Pause/Resume
+    function togglePause() {
+      isPaused = !isPaused;
+      stream.getVideoTracks().forEach(track => {
+        track.enabled = !isPaused;
+      });
+
+      if (isPaused) {
+        pauseBtn.textContent = '▶ Reprendre';
+        pauseBtn.className = 'btn btn-primary';
+        statusEl.textContent = 'En pause';
+        statusEl.className = 'status';
+        socket.emit('stream-paused');
+      } else {
+        pauseBtn.textContent = '⏸ Pause';
+        pauseBtn.className = 'btn btn-pause';
+        statusEl.textContent = 'En direct';
+        statusEl.className = 'status live';
+        socket.emit('stream-resumed');
+      }
+    }
+
+    // Arrêter
+    function stopSharing() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+
+      peerConnections.forEach(pc => pc.close());
+      peerConnections.clear();
+
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+
+      sessionId = null;
+      isPaused = false;
+      viewerCount = 0;
+
+      // UI
+      startBtn.classList.remove('hidden');
+      startBtn.textContent = 'Partager mon écran';
+      startBtn.disabled = false;
+      controls.classList.remove('active');
+      preview.classList.remove('active');
+      linkBox.classList.remove('active');
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+      viewersEl.textContent = '';
+      pauseBtn.textContent = '⏸ Pause';
+      pauseBtn.className = 'btn btn-pause';
+    }
+
+    // Compteur viewers
+    function updateViewerCount() {
+      if (viewerCount === 0) {
+        viewersEl.textContent = 'En attente de spectateurs...';
+      } else if (viewerCount === 1) {
+        viewersEl.textContent = '👁️ 1 spectateur';
+      } else {
+        viewersEl.textContent = `👁️ ${viewerCount} spectateurs`;
+      }
+    }
+
+    // Copier le lien
+    function copyLink() {
+      navigator.clipboard.writeText(linkInput.value);
+      copyBtn.textContent = '✓ Copié!';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copier';
+      }, 2000);
+    }
+
+    // Events
+    startBtn.addEventListener('click', startSharing);
+    pauseBtn.addEventListener('click', togglePause);
+    stopBtn.addEventListener('click', stopSharing);
+    copyBtn.addEventListener('click', copyLink);
+  </script>
+</body>
+</html>

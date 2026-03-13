@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScreenCast - Viewer</title>
+  <title>ScreenCast - Regarder</title>
   <style>
     * {
       margin: 0;
@@ -18,48 +18,62 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+    }
+
+    .header {
+      padding: 15px 20px;
+      background: rgba(255,255,255,0.05);
+      display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
     }
 
-    .container {
-      width: 100%;
-      max-width: 1200px;
-      padding: 20px;
-      text-align: center;
+    .logo {
+      font-size: 18px;
+      font-weight: 600;
     }
 
-    h1 {
-      font-size: 20px;
-      margin-bottom: 20px;
+    .status {
+      font-size: 14px;
       color: #a0a0a0;
     }
 
-    #video-container {
+    .status.live {
+      color: #00b894;
+    }
+
+    .status.live::before {
+      content: '● ';
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .video-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
       position: relative;
-      background: #1a1a1a;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     }
 
     video {
-      width: 100%;
-      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     }
 
     .overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.8);
-      flex-direction: column;
-      gap: 20px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
     }
 
     .overlay.hidden {
@@ -73,6 +87,7 @@
       border-top-color: #00cec9;
       border-radius: 50%;
       animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
     }
 
     @keyframes spin {
@@ -90,14 +105,12 @@
 
     .paused-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.7);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 30px 50px;
+      border-radius: 12px;
     }
 
     .paused-overlay.hidden {
@@ -105,93 +118,64 @@
     }
 
     .paused-text {
-      font-size: 24px;
+      font-size: 20px;
       color: #fdcb6e;
     }
 
-    .status-bar {
-      margin-top: 15px;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      font-size: 14px;
-      color: #666;
-    }
-
-    .status-bar .live {
-      color: #00b894;
-    }
-
-    .status-bar .live::before {
-      content: '● ';
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
     .fullscreen-btn {
-      position: absolute;
-      bottom: 15px;
-      right: 15px;
-      padding: 10px 15px;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 20px;
       background: rgba(255,255,255,0.1);
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       color: #fff;
       cursor: pointer;
       font-size: 14px;
-      opacity: 0;
+      opacity: 0.5;
       transition: opacity 0.3s;
     }
 
-    #video-container:hover .fullscreen-btn {
-      opacity: 1;
-    }
-
     .fullscreen-btn:hover {
+      opacity: 1;
       background: rgba(255,255,255,0.2);
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🖥️ ScreenCast</h1>
+  <div class="header">
+    <div class="logo">🖥️ ScreenCast</div>
+    <div id="status" class="status">Connexion...</div>
+  </div>
 
-    <div id="video-container">
-      <video id="video" autoplay playsinline></video>
+  <div class="video-container">
+    <video id="video" autoplay playsinline></video>
 
-      <div id="loading-overlay" class="overlay">
-        <div class="spinner"></div>
-        <div class="message">Connexion au stream...</div>
-      </div>
-
-      <div id="paused-overlay" class="paused-overlay hidden">
-        <div class="paused-text">⏸ Stream en pause</div>
-      </div>
-
-      <div id="error-overlay" class="overlay hidden">
-        <div class="message error" id="error-message">Erreur</div>
-      </div>
-
-      <button id="fullscreen-btn" class="fullscreen-btn">⛶ Plein écran</button>
+    <div id="loading-overlay" class="overlay">
+      <div class="spinner"></div>
+      <div class="message">Connexion au stream...</div>
     </div>
 
-    <div class="status-bar">
-      <span id="status">Connexion...</span>
+    <div id="paused-overlay" class="paused-overlay hidden">
+      <div class="paused-text">⏸ Stream en pause</div>
+    </div>
+
+    <div id="error-overlay" class="overlay hidden">
+      <div class="message error" id="error-message">Erreur</div>
     </div>
   </div>
 
+  <button id="fullscreen-btn" class="fullscreen-btn">⛶ Plein écran</button>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Récupérer l'ID de session depuis l'URL
+    // Récupérer l'ID de session
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('s');
 
     if (!sessionId) {
-      showError('Lien invalide - pas d\'ID de session');
+      showError('Lien invalide');
     }
 
     // Éléments DOM
@@ -202,7 +186,6 @@
     const errorMessage = document.getElementById('error-message');
     const statusEl = document.getElementById('status');
     const fullscreenBtn = document.getElementById('fullscreen-btn');
-    const videoContainer = document.getElementById('video-container');
 
     // WebRTC
     let peerConnection = null;
@@ -213,7 +196,7 @@
       ]
     };
 
-    // Connexion au serveur
+    // Connexion
     const socket = io();
 
     socket.on('connect', () => {
@@ -228,51 +211,46 @@
       showError('Impossible de se connecter au serveur');
     });
 
-    // Recevoir l'offre WebRTC du broadcaster
+    // Recevoir l'offre WebRTC
     socket.on('offer', async (broadcasterId, offer) => {
       peerConnection = new RTCPeerConnection(rtcConfig);
 
-      // Quand on reçoit le stream
       peerConnection.ontrack = (event) => {
         video.srcObject = event.streams[0];
         loadingOverlay.classList.add('hidden');
         statusEl.innerHTML = '<span class="live">En direct</span>';
+        statusEl.className = 'status live';
       };
 
-      // Envoyer les ICE candidates
       peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit('ice-candidate', broadcasterId, event.candidate);
         }
       };
 
-      // Traiter l'offre et envoyer la réponse
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       socket.emit('answer', broadcasterId, answer);
     });
 
-    // ICE candidate du broadcaster
     socket.on('ice-candidate', (senderId, candidate) => {
       if (peerConnection) {
         peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       }
     });
 
-    // Stream en pause
     socket.on('stream-paused', () => {
       pausedOverlay.classList.remove('hidden');
       statusEl.textContent = 'En pause';
+      statusEl.className = 'status';
     });
 
-    // Stream repris
     socket.on('stream-resumed', () => {
       pausedOverlay.classList.add('hidden');
-      statusEl.innerHTML = '<span class="live">En direct</span>';
+      statusEl.className = 'status live';
     });
 
-    // Stream terminé
     socket.on('stream-ended', () => {
       showError('Le stream est terminé');
       if (peerConnection) {
@@ -280,24 +258,23 @@
       }
     });
 
-    // Afficher une erreur
     function showError(msg) {
       loadingOverlay.classList.add('hidden');
       errorOverlay.classList.remove('hidden');
       errorMessage.textContent = msg;
       statusEl.textContent = 'Déconnecté';
+      statusEl.className = 'status';
     }
 
     // Plein écran
     fullscreenBtn.addEventListener('click', () => {
-      if (videoContainer.requestFullscreen) {
-        videoContainer.requestFullscreen();
-      } else if (videoContainer.webkitRequestFullscreen) {
-        videoContainer.webkitRequestFullscreen();
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.body.requestFullscreen();
       }
     });
 
-    // Raccourci clavier F pour plein écran
     document.addEventListener('keydown', (e) => {
       if (e.key === 'f' || e.key === 'F') {
         fullscreenBtn.click();
